@@ -3,7 +3,7 @@
 bl_info = {
     "name": "Space Switcher Utility",
     "author": "BlenderBoi",
-    "version": (1, 0),
+    "version": (1, 1),
     "blender": (2, 80, 0),
     "location": "Side Panel > Space Switcher Utilities",
     "description": "Generate Empties with Constraint and Bakes",
