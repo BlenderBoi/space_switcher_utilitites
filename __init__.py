@@ -103,6 +103,7 @@ class SPACESWITCHERUTILS_OT_Create_Space_Switcher_Empties(bpy.types.Operator):
     offset_frame: bpy.props.IntProperty(default=0, name="Offset Frame")
     #apply_empties: bpy.props.BoolProperty(default=False, name="Apply After Create")
     offset_child: bpy.props.FloatProperty(default=2, min=0.01, name="Empty Offset")
+    constraint_bone_to_empty: bpy.props.BoolProperty(default=True, name="Constraint Bone to Empty")
     
     def invoke(self, context, event):
         
@@ -123,6 +124,7 @@ class SPACESWITCHERUTILS_OT_Create_Space_Switcher_Empties(bpy.types.Operator):
         layout.prop(self, "offset_frame")
         layout.separator()
         layout.prop(self, "preclear_empties")
+        layout.prop(self, "constraint_bone_to_empty")
         #layout.prop(self, "apply_empties")
 
     
@@ -167,6 +169,9 @@ class SPACESWITCHERUTILS_OT_Create_Space_Switcher_Empties(bpy.types.Operator):
             constraint = empty.constraints.new(self.constraint_type)
             if self.constraint_type == "CHILD_OF":
 
+
+
+
                 constraint.inverse_matrix = empty.matrix_world.inverted()
 
                 dir = mathutils.Vector((0, 1, 0)) * self.offset_child
@@ -181,6 +186,10 @@ class SPACESWITCHERUTILS_OT_Create_Space_Switcher_Empties(bpy.types.Operator):
             
             constraint.target = obj
             constraint.subtarget = pose_bone.name
+
+
+
+
             empty.select_set(True)
             
             empty.is_space_switcher_empties = True
@@ -192,10 +201,13 @@ class SPACESWITCHERUTILS_OT_Create_Space_Switcher_Empties(bpy.types.Operator):
             if empty.space_switcher_type == "CHILD_OF":
                 empty.space_switcher_type = "DAMPED_TRACK"
                             
+
             
             action = bpy.data.actions.new(empty.name + "Temp_Action")
             action = bake_action(empty, action, start_frame, end_frame, bake_settings)
             
+
+
             anim_data = empty.animation_data_create()
             anim_data.action = action
             
@@ -206,17 +218,29 @@ class SPACESWITCHERUTILS_OT_Create_Space_Switcher_Empties(bpy.types.Operator):
                 for kf in fc.keyframe_points:
                     kf.co.x += self.offset_frame
             
+
+
             for fc in action.fcurves:
                 if self.constraint_type == "COPY_LOCATION":
                     
                     if not fc.data_path == "location":
                         action.fcurves.remove(fc)
                         
-                if self.constraint_type in "COPY_ROTATION":
+                if self.constraint_type in ["COPY_ROTATION", "DAMPED_TRACK"]:
 
                     if not fc.data_path in ["rotation_euler", "rotation_axis_angle", "rotation_quaternion"]:
                         action.fcurves.remove(fc)
                 
+
+
+            constraint = pose_bone.constraints.new(empty.space_switcher_type)
+            constraint.target = empty
+
+            if empty.space_switcher_type == "COPY_ROTATION":
+                constraint = empty.constraints.new("COPY_LOCATION")
+                constraint.target = obj 
+                constraint.subtarget = pose_bone.name
+
 
              
         #if self.apply_empties:
@@ -260,9 +284,7 @@ class SPACESWITCHERUTILS_OT_Apply_Space_Switcher_Empties(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         if context.mode in ["POSE", "OBJECT"]:
-            if context.selected_objects:
-                if len(context.selected_objects) > 0:
-                    return True
+            return True
 
     def execute(self, context):
         
@@ -302,15 +324,9 @@ class SPACESWITCHERUTILS_OT_Apply_Space_Switcher_Empties(bpy.types.Operator):
                     bone = obj.pose.bones.get(empty.space_switcher_bone)
                     if bone:
                         
-                        
 
-
-                        constraint = bone.constraints.new(empty.space_switcher_type)
-                        constraint.target = empty
-                        
-                        
-                        
-                        
+                        for con in empty.constraints:
+                            empty.constraints.remove(con)
                         
                         action = None
                         
@@ -335,11 +351,15 @@ class SPACESWITCHERUTILS_OT_Apply_Space_Switcher_Empties(bpy.types.Operator):
                                 end_frame = self.end_frame
                                 action = bake_action(obj, obj.animation_data.action, start_frame, end_frame, bake_settings)
                         
-                        bone.constraints.remove(constraint)
                         
                         if self.remove_empties:
                             
                             bpy.data.objects.remove(empty)
+
+                        for constraint in bone.constraints:
+                            bone.constraints.remove(constraint)
+
+
                 
         
         return {'FINISHED'}
